@@ -131,6 +131,7 @@ class ProvenanceQAEngine:
         self,
         question: str,
         documents: Optional[List[str]] = None,
+        document_chunks: Optional[List] = None,
         context_strategy: Optional[ContextStrategy] = None,
         max_tokens: Optional[int] = None,
         validate_answer: Optional[bool] = None
@@ -141,6 +142,7 @@ class ProvenanceQAEngine:
         Args:
             question: User's question
             documents: Optional list of specific documents to search
+            document_chunks: Optional list of DocumentChunk objects to use as context (takes priority)
             context_strategy: Strategy for context assembly
             max_tokens: Maximum context tokens (overrides default)
             validate_answer: Whether to validate answer (overrides default)
@@ -162,6 +164,7 @@ class ProvenanceQAEngine:
                 context_window = self._retrieve_and_assemble_context(
                     question_analysis,
                     documents,
+                    document_chunks,
                     context_strategy or self.default_context_strategy,
                     max_tokens or self.max_context_tokens
                 )
@@ -220,8 +223,9 @@ class ProvenanceQAEngine:
         self,
         question_analysis: QuestionAnalysis,
         documents: Optional[List[str]],
-        strategy: ContextStrategy,
-        max_tokens: int
+        document_chunks: Optional[List] = None,
+        strategy: ContextStrategy = None,
+        max_tokens: int = 4000
     ) -> ContextWindow:
         """Retrieve relevant chunks and assemble context window"""
         
@@ -231,13 +235,17 @@ class ProvenanceQAEngine:
         # Retrieve chunks using available methods
         retrieved_chunks = []
         
-        if self.hybrid_search and self.reranker:
-            # Use integrated ContractSense modules
+        # Priority 1: Use provided document_chunks if available (uploaded document)
+        if document_chunks:
+            logger.info(f"Using {len(document_chunks)} provided document chunks from uploaded document")
+            retrieved_chunks = self._search_provided_chunks(question_analysis, search_terms, document_chunks)
+        elif self.hybrid_search and self.reranker:
+            # Priority 2: Use integrated ContractSense modules
             retrieved_chunks = self._retrieve_with_existing_modules(
                 question_analysis, search_terms, documents
             )
         else:
-            # Use mock retrieval for standalone operation
+            # Priority 3: Use mock retrieval (CUAD documents or mock data)
             retrieved_chunks = self._mock_retrieval(question_analysis, search_terms)
         
         # Assemble context window
@@ -246,6 +254,107 @@ class ProvenanceQAEngine:
         )
         
         return context_window
+    
+    def _search_provided_chunks(
+        self,
+        question_analysis: QuestionAnalysis,
+        search_terms: List[str],
+        document_chunks: List
+    ) -> List:
+        """Search through provided document chunks based on question and search terms"""
+        
+        from .models.context_models import DocumentChunk
+        
+        if not document_chunks:
+            return []
+        
+        # Simple keyword-based relevance scoring with risk-aware boosting
+        question_lower = question_analysis.original_question.lower()
+        search_terms_lower = [term.lower() for term in search_terms]
+        
+        # Check if question is about risk
+        risk_keywords = ["risk", "risky", "dangerous", "problem", "issue", "concern", "warning", "high risk", "medium risk"]
+        is_risk_question = any(kw in question_lower for kw in risk_keywords)
+        
+        scored_chunks = []
+        for chunk in document_chunks:
+            if not hasattr(chunk, 'content'):
+                continue
+                
+            content_lower = chunk.content.lower()
+            
+            # Calculate relevance score
+            score = 0.0
+            
+            # Always include document summary chunk (high priority)
+            if hasattr(chunk, 'chunk_id') and chunk.chunk_id == "doc_summary":
+                score += 5.0  # High base score for summary
+            
+            # Check for exact question keywords
+            for term in search_terms_lower:
+                if term in content_lower:
+                    score += 2.0
+            
+            # Check for question words
+            question_words = set(question_lower.split())
+            content_words = set(content_lower.split())
+            common_words = question_words.intersection(content_words)
+            score += len(common_words) * 0.5
+            
+            # Boost score if chunk has high relevance_score attribute
+            if hasattr(chunk, 'relevance_score'):
+                score += chunk.relevance_score * 0.3
+            
+            # Boost score if chunk title matches question
+            if hasattr(chunk, 'section_title') and chunk.section_title:
+                title_lower = chunk.section_title.lower()
+                for term in search_terms_lower:
+                    if term in title_lower:
+                        score += 1.5
+            
+            # Risk-aware boosting: if question is about risk, prioritize high-risk chunks
+            if is_risk_question:
+                if hasattr(chunk, 'metadata') and chunk.metadata:
+                    risk_level = chunk.metadata.get("risk_level", "Low")
+                    if risk_level == "High":
+                        score += 3.0
+                    elif risk_level == "Medium":
+                        score += 1.5
+                # Also check content for risk indicators
+                if "risk level: high" in content_lower:
+                    score += 2.0
+                elif "risk level: medium" in content_lower:
+                    score += 1.0
+            
+            # Boost chunks with risk assessment details
+            if "RISK ASSESSMENT:" in chunk.content:
+                score += 1.0
+            
+            # Boost chunks with tags that match question
+            if hasattr(chunk, 'metadata') and chunk.metadata:
+                tags = chunk.metadata.get("tags", [])
+                for tag in tags:
+                    tag_lower = tag.lower()
+                    for term in search_terms_lower:
+                        if term in tag_lower or tag_lower in term:
+                            score += 1.0
+            
+            if score > 0:
+                scored_chunks.append((score, chunk))
+        
+        # Sort by score descending and return top chunks
+        scored_chunks.sort(key=lambda x: x[0], reverse=True)
+        
+        # Return top 15 most relevant chunks (increased from 10 for better context)
+        top_chunks = [chunk for _, chunk in scored_chunks[:15]]
+        
+        # Always include document summary if available
+        summary_chunks = [chunk for chunk in document_chunks if hasattr(chunk, 'chunk_id') and chunk.chunk_id == "doc_summary"]
+        if summary_chunks and summary_chunks[0] not in top_chunks:
+            top_chunks.insert(0, summary_chunks[0])
+        
+        logger.info(f"Selected {len(top_chunks)} relevant chunks from {len(document_chunks)} provided chunks")
+        return top_chunks
     
     def _retrieve_with_existing_modules(
         self,

@@ -75,7 +75,13 @@ class AnswerGenerator:
     def _build_prompt_templates(self) -> Dict[str, str]:
         """Build prompt templates for different question types"""
         return {
-            "factual": """You are a legal document analysis expert. Answer the following question based solely on the provided context.
+            "factual": """You are a legal document analysis expert specializing in contract risk assessment. Answer the following question based solely on the provided context.
+
+IMPORTANT: The context includes contract clauses with risk assessments. When answering:
+- Pay attention to RISK ASSESSMENT sections which contain severity levels, descriptions, and suggestions
+- Use risk level information (High/Medium/Low) to provide context-aware answers
+- Reference specific risk indicators and problematic spans when relevant
+- Include risk-related insights when answering questions about contract terms
 
 QUESTION: {question}
 
@@ -84,10 +90,12 @@ CONTEXT:
 
 INSTRUCTIONS:
 1. Provide a clear, factual answer based only on the information in the context
-2. If the answer is not clearly stated in the context, say so explicitly
-3. Include specific references to relevant sections or documents
-4. Use precise language and avoid speculation
-5. If there are multiple relevant pieces of information, organize them clearly
+2. If risk assessment information is available, incorporate it into your answer
+3. If the answer is not clearly stated in the context, say so explicitly
+4. Include specific references to relevant sections, clauses, or risk assessments
+5. Use precise language and avoid speculation
+6. If there are multiple relevant pieces of information, organize them clearly
+7. When discussing clauses, mention their risk levels if available
 
 ANSWER:""",
 
@@ -107,7 +115,13 @@ INSTRUCTIONS:
 
 COMPARISON:""",
 
-            "analytical": """You are a legal document analysis expert. Provide a thorough analysis based on the question and context provided.
+            "analytical": """You are a legal document analysis expert specializing in contract risk assessment. Provide a thorough analysis based on the question and context provided.
+
+IMPORTANT: The context includes contract clauses with risk assessments. When analyzing:
+- Consider the risk levels (High/Medium/Low) associated with clauses
+- Incorporate risk assessment descriptions and suggestions into your analysis
+- Highlight clauses with High or Medium risk levels
+- Use risk indicators and problematic spans to provide deeper insights
 
 QUESTION: {question}
 
@@ -117,9 +131,10 @@ CONTEXT:
 INSTRUCTIONS:
 1. Analyze the relevant legal concepts, terms, and implications
 2. Break down complex information into clear, understandable components
-3. Identify potential risks, obligations, or important considerations
-4. Base your analysis strictly on the provided context
-5. If your analysis requires information not in the context, note these limitations
+3. Identify potential risks, obligations, or important considerations using the risk assessment data
+4. Base your analysis strictly on the provided context, including risk assessment information
+5. When discussing risks, reference the specific risk assessments provided
+6. If your analysis requires information not in the context, note these limitations
 
 ANALYSIS:""",
 
@@ -139,7 +154,13 @@ INSTRUCTIONS:
 
 PROCEDURE:""",
 
-            "default": """You are a legal document analysis expert. Answer the following question based on the provided context.
+            "default": """You are a legal document analysis expert specializing in contract risk assessment. Answer the following question based on the provided context.
+
+IMPORTANT: The context includes contract clauses with risk assessments. When answering:
+- Pay attention to RISK ASSESSMENT sections which contain severity levels, descriptions, and suggestions
+- Use risk level information (High/Medium/Low) to provide context-aware answers
+- Reference specific risk indicators and problematic spans when relevant
+- Include risk-related insights when answering questions about contract terms
 
 QUESTION: {question}
 
@@ -147,11 +168,13 @@ CONTEXT:
 {context}
 
 INSTRUCTIONS:
-1. Provide a comprehensive answer based solely on the context provided
+1. Provide a comprehensive answer based solely on the context provided, including risk assessment data
 2. Be precise and accurate in your response
-3. Include relevant details and references to specific sections
-4. If the context is insufficient to fully answer the question, explain what information is available and what is missing
-5. Maintain objectivity and avoid speculation beyond what is stated in the documents
+3. Include relevant details and references to specific sections, clauses, and their risk levels
+4. When discussing clauses, mention their risk assessments if available
+5. If the context is insufficient to fully answer the question, explain what information is available and what is missing
+6. Maintain objectivity and avoid speculation beyond what is stated in the documents
+7. Incorporate risk assessment insights to provide more valuable answers
 
 ANSWER:"""
         }

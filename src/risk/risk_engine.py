@@ -16,9 +16,18 @@ import time
 import logging
 from pathlib import Path
 
-from .models.ml_risk_classifier import (
-    RiskClassifier, FeatureVector, RiskPrediction
-)
+# Try to import ML classifier, but make it optional
+try:
+    from .models.ml_risk_classifier import (
+        RiskClassifier, FeatureVector, RiskPrediction
+    )
+    ML_CLASSIFIER_AVAILABLE = True
+except ImportError:
+    # ML classifier not available (torch missing) - that's okay
+    RiskClassifier = None
+    FeatureVector = None
+    RiskPrediction = None
+    ML_CLASSIFIER_AVAILABLE = False
 from .analyzers.financial_analyzer import FinancialRiskAnalyzer, FinancialRiskMetrics
 from .analyzers.legal_analyzer import LegalRiskAnalyzer, LegalRiskMetrics
 from .utils.feature_extractor import FeatureExtractor, ExtractedFeatures
@@ -68,14 +77,24 @@ class RiskAssessmentEngine:
     """Main risk assessment engine for Module 4"""
     
     def __init__(self, model_path: Optional[str] = None, device: str = "auto"):
-        # Initialize ML classifier
-        self.ml_classifier = RiskClassifier(device=device)
-        if model_path and Path(model_path).exists():
-            self.ml_classifier.load_model(model_path)
-            self.ml_trained = True
+        # Initialize ML classifier (if available)
+        if ML_CLASSIFIER_AVAILABLE and RiskClassifier:
+            try:
+                self.ml_classifier = RiskClassifier(device=device)
+                if model_path and Path(model_path).exists():
+                    self.ml_classifier.load_model(model_path)
+                    self.ml_trained = True
+                else:
+                    self.ml_trained = False
+                    logger.info("ML classifier available but no model loaded - will use rule-based assessment")
+            except Exception as e:
+                logger.warning(f"Failed to initialize ML classifier: {e}. Using rule-based assessment only.")
+                self.ml_classifier = None
+                self.ml_trained = False
         else:
+            self.ml_classifier = None
             self.ml_trained = False
-            logger.warning("ML classifier not loaded - will use rule-based assessment only")
+            logger.info("ML classifier not available (torch missing) - will use rule-based assessment only")
         
         # Initialize rule-based analyzers
         self.financial_analyzer = FinancialRiskAnalyzer()
@@ -105,14 +124,20 @@ class RiskAssessmentEngine:
             existing_metadata=contract_metadata or {}
         )
         
-        # Create feature vector for ML classifier
-        feature_vector = self._create_feature_vector(
-            clause_id, clause_type, clause_text, extracted_features, contract_metadata
-        )
+        # Create feature vector for ML classifier (only if ML is available)
+        feature_vector = None
+        if ML_CLASSIFIER_AVAILABLE and FeatureVector:
+            try:
+                feature_vector = self._create_feature_vector(
+                    clause_id, clause_type, clause_text, extracted_features, contract_metadata
+                )
+            except Exception as e:
+                logger.warning(f"Failed to create feature vector: {e}")
+                feature_vector = None
         
-        # ML-based risk assessment (primary method)
+        # ML-based risk assessment (primary method, if available)
         ml_prediction = None
-        if self.ml_trained:
+        if self.ml_trained and self.ml_classifier and feature_vector:
             try:
                 ml_prediction = self.ml_classifier.predict(feature_vector, explain=True)
             except Exception as e:
@@ -147,11 +172,11 @@ class RiskAssessmentEngine:
             clause_id=clause_id,
             clause_type=clause_type,
             clause_text=clause_text,
-            ml_risk_level=ml_prediction.risk_level,
-            ml_confidence=ml_prediction.confidence_score,
-            ml_probabilities=ml_prediction.probabilities,
-            ml_rationale=ml_prediction.rationale,
-            evidence_tokens=ml_prediction.evidence_tokens,
+            ml_risk_level=getattr(ml_prediction, 'risk_level', 'MEDIUM'),
+            ml_confidence=getattr(ml_prediction, 'confidence_score', 0.3),
+            ml_probabilities=getattr(ml_prediction, 'probabilities', {"LOW": 0.3, "MEDIUM": 0.5, "HIGH": 0.2}),
+            ml_rationale=getattr(ml_prediction, 'rationale', 'Rule-based assessment only'),
+            evidence_tokens=getattr(ml_prediction, 'evidence_tokens', []),
             financial_risk=financial_risk,
             legal_risk=legal_risk,
             extracted_features=extracted_features,
@@ -238,20 +263,44 @@ class RiskAssessmentEngine:
             industry=industry
         )
     
-    def _create_fallback_prediction(self, clause_id: str) -> RiskPrediction:
+    def _create_fallback_prediction(self, clause_id: str):
         """Create fallback prediction when ML classifier unavailable"""
-        return RiskPrediction(
-            clause_id=clause_id,
-            risk_level="MEDIUM",  # Conservative fallback
-            risk_probability=0.5,
-            confidence_score=0.3,  # Low confidence to indicate fallback
-            probabilities={"LOW": 0.3, "MEDIUM": 0.5, "HIGH": 0.2},
-            rationale="ML classifier unavailable - using rule-based assessment",
-            evidence_tokens=[],
-            metadata={}
-        )
+        if RiskPrediction:
+            return RiskPrediction(
+                clause_id=clause_id,
+                risk_level="MEDIUM",  # Conservative fallback
+                risk_probability=0.5,
+                confidence_score=0.3,  # Low confidence to indicate fallback
+                probabilities={"LOW": 0.3, "MEDIUM": 0.5, "HIGH": 0.2},
+                rationale="ML classifier unavailable - using rule-based assessment",
+                evidence_tokens=[],
+                metadata={}
+            )
+        else:
+            # Return a simple dict if RiskPrediction class not available
+            from dataclasses import dataclass
+            @dataclass
+            class SimplePrediction:
+                clause_id: str
+                risk_level: str
+                confidence_score: float
+                probabilities: dict
+                rationale: str
+                evidence_tokens: list
+                metadata: dict
+                risk_probability: float = 0.5
+            
+            return SimplePrediction(
+                clause_id=clause_id,
+                risk_level="MEDIUM",
+                confidence_score=0.3,
+                probabilities={"LOW": 0.3, "MEDIUM": 0.5, "HIGH": 0.2},
+                rationale="ML classifier unavailable - using rule-based assessment",
+                evidence_tokens=[],
+                metadata={}
+            )
     
-    def _combine_assessments(self, ml_prediction: RiskPrediction,
+    def _combine_assessments(self, ml_prediction,
                            financial_risk: FinancialRiskMetrics,
                            legal_risk: LegalRiskMetrics,
                            clause_type: str) -> tuple[str, float, bool]:
@@ -264,7 +313,9 @@ class RiskAssessmentEngine:
         rule_weight = 0.4 if not self.ml_trained else 0.4  # Increase rule weight if no ML
         
         # Convert risk scores to normalized values (0-1)
-        ml_score = self._risk_level_to_score(ml_prediction.risk_level)
+        # Handle case where ml_prediction might not have risk_level attribute
+        ml_risk_level = getattr(ml_prediction, 'risk_level', 'MEDIUM')
+        ml_score = self._risk_level_to_score(ml_risk_level)
         financial_score = min(financial_risk.overall_financial_risk / 10.0, 1.0)
         legal_score = min(legal_risk.overall_legal_risk / 10.0, 1.0)
         rule_score = (financial_score + legal_score) / 2.0
@@ -281,7 +332,7 @@ class RiskAssessmentEngine:
         final_risk_level = self._score_to_risk_level(combined_score)
         
         # Calculate combined confidence
-        ml_confidence = ml_prediction.confidence_score if self.ml_trained else 0.0
+        ml_confidence = getattr(ml_prediction, 'confidence_score', 0.3) if self.ml_trained else 0.0
         rule_confidence = (financial_risk.confidence + legal_risk.confidence) / 2.0
         
         if self.ml_trained:

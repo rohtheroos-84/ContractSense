@@ -87,6 +87,17 @@ class PDFParser:
         """Parse PDF using PyMuPDF for selectable text"""
         pages = []
         
+        # Verify file exists and has content
+        if not pdf_path.exists():
+            raise FileNotFoundError(f"PDF file not found: {pdf_path}")
+        
+        file_size = pdf_path.stat().st_size
+        if file_size == 0:
+            raise ValueError(f"PDF file is empty: {pdf_path}")
+        
+        if file_size < 100:  # PDFs should be at least a few hundred bytes
+            raise ValueError(f"PDF file appears corrupted (too small: {file_size} bytes): {pdf_path}")
+        
         with fitz.open(str(pdf_path)) as pdf_doc:
             for page_num in range(len(pdf_doc)):
                 fitz_page = pdf_doc[page_num]

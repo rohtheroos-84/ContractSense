@@ -32,11 +32,18 @@ from .risk_engine import (
     DocumentRiskAssessment
 )
 
-from .models.ml_risk_classifier import (
-    RiskClassifier,
-    FeatureVector,
-    RiskPrediction
-)
+# Lazy import ML classifier to avoid requiring torch for rule-based analyzers
+try:
+    from .models.ml_risk_classifier import (
+        RiskClassifier,
+        FeatureVector,
+        RiskPrediction
+    )
+except ImportError:
+    # ML classifier not available (torch missing) - that's okay for rule-based analysis
+    RiskClassifier = None
+    FeatureVector = None
+    RiskPrediction = None
 
 from .analyzers.financial_analyzer import (
     FinancialRiskAnalyzer,

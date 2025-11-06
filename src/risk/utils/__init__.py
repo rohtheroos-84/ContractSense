@@ -7,16 +7,15 @@ Contains utility functions for risk assessment:
 - Risk calculation helpers
 """
 
+# Import only what actually exists in the modules
 from .feature_extractor import (
     FeatureExtractor,
     ExtractedFeatures,
-    MonetaryAmount,
-    LegalEntity
+    MonetaryAmount
 )
 
 __all__ = [
     "FeatureExtractor",
     "ExtractedFeatures", 
-    "MonetaryAmount",
-    "LegalEntity"
+    "MonetaryAmount"
 ]

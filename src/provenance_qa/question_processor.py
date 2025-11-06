@@ -10,6 +10,7 @@ import logging
 from typing import List, Dict, Any, Optional, Tuple
 
 try:
+    # Try relative imports first (when imported as part of package)
     from ..models.question_models import (
         QuestionType, QuestionIntent, ComplexityLevel, Entity, QuestionAnalysis
     )
@@ -17,15 +18,25 @@ try:
         generate_id, clean_text, extract_legal_entities, extract_keywords,
         extract_legal_concepts, calculate_confidence_score, Timer
     )
-except ImportError:
-    # Fallback for direct execution
-    from provenance_qa.models.question_models import (
-        QuestionType, QuestionIntent, ComplexityLevel, Entity, QuestionAnalysis
-    )
-    from provenance_qa.utils.common import (
-        generate_id, clean_text, extract_legal_entities, extract_keywords,
-        extract_legal_concepts, calculate_confidence_score, Timer
-    )
+except (ImportError, ValueError):
+    # Fallback to absolute imports
+    try:
+        from src.provenance_qa.models.question_models import (
+            QuestionType, QuestionIntent, ComplexityLevel, Entity, QuestionAnalysis
+        )
+        from src.provenance_qa.utils.common import (
+            generate_id, clean_text, extract_legal_entities, extract_keywords,
+            extract_legal_concepts, calculate_confidence_score, Timer
+        )
+    except ImportError:
+        # Final fallback for direct execution
+        from provenance_qa.models.question_models import (
+            QuestionType, QuestionIntent, ComplexityLevel, Entity, QuestionAnalysis
+        )
+        from provenance_qa.utils.common import (
+            generate_id, clean_text, extract_legal_entities, extract_keywords,
+            extract_legal_concepts, calculate_confidence_score, Timer
+        )
 
 logger = logging.getLogger(__name__)
 
