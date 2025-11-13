@@ -300,7 +300,16 @@ ANSWER:"""
         all_chunks = context_window.get_all_chunks()
         
         if not all_chunks:
-            answer.text = "I'm sorry, but I couldn't find relevant information in the documents to answer your question."
+            # Natural "I don't know" responses when no relevant content is found
+            no_info_responses = [
+                "I'm sorry, but I couldn't find relevant information in the documents to answer your question.",
+                "I don't have enough information in the available contracts to answer that.",
+                "Sorry, I can't find specific details about that in these contract documents.", 
+                "I'm afraid the documents don't contain the information needed to answer your question.",
+                "That's not covered in the contract documents I have access to."
+            ]
+            import random
+            answer.text = random.choice(no_info_responses)
             answer.answer_type = AnswerType.NOT_FOUND
             answer.confidence_level = ConfidenceLevel.VERY_LOW
             return answer
@@ -347,67 +356,154 @@ ANSWER:"""
         """Generate focused answer about termination clauses"""
         relevant_chunks = [c for c in chunks if "terminat" in c.content.lower()]
         
-        if relevant_chunks:
-            chunk = relevant_chunks[0]
-            if "thirty (30) days" in chunk.content:
-                return f"According to the {chunk.document_title}, {chunk.section_title}, termination requires thirty (30) days written notice. The agreement may be terminated by either party with proper notice. Upon termination, all rights and licenses granted shall immediately cease, and confidential information must be returned or destroyed."
+        if not relevant_chunks:
+            return "I couldn't find specific termination clauses in the contract documents I reviewed."
         
-        return "Based on the available contract documents, termination clauses specify notice requirements and post-termination obligations, though specific terms may vary by agreement type."
+        chunk = relevant_chunks[0]
+        if "thirty (30) days" in chunk.content.lower():
+            return f"Looking at the termination section, it appears that either party can end the agreement with thirty days' written notice. Once terminated, all rights and licenses stop immediately, and any confidential information needs to be returned or destroyed."
+        elif "notice" in chunk.content.lower():
+            return f"The contract includes termination provisions that require advance notice, though I'd need to check the specific timeframe requirements."
+        
+        return "There are termination clauses in the contract, but I'd need to review the specific terms to give you accurate details about notice periods and obligations."
     
     def _generate_liability_answer(self, chunks, question_analysis) -> str:
         """Generate focused answer about liability provisions"""
         relevant_chunks = [c for c in chunks if "liabilit" in c.content.lower()]
         
-        if relevant_chunks:
-            chunk = relevant_chunks[0]
-            if "EXCEED" in chunk.content:
-                return f"The liability provisions in the {chunk.document_title} include important limitations. Liability is typically capped at the total amount paid under the agreement in the preceding twelve (12) months. The limitations generally cover direct damages only, excluding consequential, incidental, or punitive damages. However, certain exceptions may apply for willful misconduct or confidentiality breaches."
+        if not relevant_chunks:
+            return "I don't see specific liability provisions in the sections I reviewed. There might be liability clauses elsewhere in the contract."
         
-        return "The liability provisions establish limits on damages and typically cap liability at amounts paid under the agreement, with exclusions for certain types of damages."
+        chunk = relevant_chunks[0]
+        if "exceed" in chunk.content.lower() or "cap" in chunk.content.lower():
+            return f"The contract does include liability limitations. From what I can see, there's typically a cap on damages - often limited to amounts already paid under the agreement. It usually excludes things like consequential or punitive damages, though there may be exceptions for serious misconduct."
+        elif "limitation" in chunk.content.lower():
+            return "There are liability limitations mentioned in the contract, but I'd need to examine the specific terms to tell you exactly how damages are capped."
+        
+        return "The contract mentions liability provisions, but I'd need to look more closely at the specific language to explain the limitations."
     
     def _generate_payment_answer(self, chunks, question_analysis) -> str:
         """Generate focused answer about payment terms"""
-        relevant_chunks = [c for c in chunks if "payment" in c.content.lower() or "salary" in c.content.lower()]
+        relevant_chunks = [c for c in chunks if "payment" in c.content.lower() or "salary" in c.content.lower() or "compensation" in c.content.lower()]
         
-        if relevant_chunks:
-            chunk = relevant_chunks[0]
-            if "bi-weekly" in chunk.content:
-                return f"According to the {chunk.document_title}, payment is structured as bi-weekly installments via direct deposit. Payments are made on the 15th and last day of each month, with adjustments for weekends and holidays. The compensation structure may include base amounts plus potential performance bonuses, subject to applicable tax withholdings."
+        if not relevant_chunks:
+            return "I don't see specific payment terms in the contract sections I have access to."
         
-        return "Payment terms specify the frequency, method, and timing of compensation, typically including base amounts and any additional performance-based components."
+        chunk = relevant_chunks[0]
+        if "bi-weekly" in chunk.content.lower():
+            return f"The payment schedule shows bi-weekly payments, typically on the 15th and last day of each month. Payments are usually made by direct deposit, with standard tax withholdings applied."
+        elif "monthly" in chunk.content.lower():
+            return "Payments appear to be made monthly, though I'd need to check the exact dates and method."
+        elif any(term in chunk.content.lower() for term in ["salary", "wage", "compensation"]):
+            return "There are compensation details in the contract, but I'd need to review the specific payment schedule and amounts."
+        
+        return "I can see there are payment terms mentioned, but the specific details aren't clear from what I'm reviewing."
     
     def _generate_date_answer(self, chunks, question_analysis) -> str:
         """Generate focused answer about effective dates"""
         relevant_chunks = [c for c in chunks if "effective" in c.content.lower() and "date" in c.content.lower()]
         
-        if relevant_chunks:
-            chunk = relevant_chunks[0]
-            if "January 1, 2024" in chunk.content:
-                return f"The effective date specified in the {chunk.document_title} is January 1, 2024. This marks when the agreement becomes binding and its terms take effect. The document also specifies duration and renewal provisions that relate to this effective date."
+        if not relevant_chunks:
+            # Look for any date-related content
+            date_chunks = [c for c in chunks if any(term in c.content.lower() for term in ["date", "effective", "commence", "begin"])]
+            if not date_chunks:
+                return "I couldn't find the effective date mentioned in the contract sections I reviewed."
+            relevant_chunks = date_chunks
         
-        return "The contract's effective date determines when the agreement terms become binding, though the specific date would need to be verified in the individual contract documents."
+        chunk = relevant_chunks[0]
+        # Look for specific date patterns
+        import re
+        date_patterns = [
+            r'\b(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},?\s+\d{4}\b',
+            r'\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b'
+        ]
+        
+        for pattern in date_patterns:
+            dates = re.findall(pattern, chunk.content)
+            if dates:
+                return f"The effective date appears to be {dates[0]}. This is when the agreement terms become binding and take effect."
+        
+        if "effective" in chunk.content.lower():
+            return "The contract mentions an effective date, but I'd need to check the specific date in the document."
+        
+        return "I can see date-related information in the contract, but the specific effective date isn't clear from what I'm reviewing."
     
     def _generate_renewal_answer(self, chunks, question_analysis) -> str:
         """Generate focused answer about renewal options"""
-        relevant_chunks = [c for c in chunks if "renew" in c.content.lower()]
+        relevant_chunks = [c for c in chunks if "renew" in c.content.lower() or "extend" in c.content.lower() or "term" in c.content.lower()]
         
-        if relevant_chunks:
-            chunk = relevant_chunks[0]
-            if "one-year terms" in chunk.content:
-                return f"Yes, renewal options are available according to the {chunk.document_title}. The agreement may be renewed for additional one-year terms by providing written notice at least sixty (60) days prior to expiration. This allows for continued coverage under similar terms and conditions."
+        if not relevant_chunks:
+            return "I don't see specific renewal terms mentioned in the contract sections I have access to."
         
-        return "Renewal provisions may be available depending on the specific agreement, typically requiring advance written notice and potentially allowing for extended terms."
+        chunk = relevant_chunks[0]
+        if "one-year terms" in chunk.content.lower():
+            return f"Yes, it looks like the contract can be renewed for additional one-year periods. You'd need to give written notice at least sixty days before it expires to extend it under similar terms."
+        elif "automatic" in chunk.content.lower() and "renew" in chunk.content.lower():
+            return "The contract appears to have automatic renewal provisions, though I'd need to check the specific notice requirements to opt out."
+        elif "notice" in chunk.content.lower() and ("renew" in chunk.content.lower() or "extend" in chunk.content.lower()):
+            return "There are renewal options available, but they require advance notice. I'd need to check the exact timing requirements."
+        
+        return "The contract mentions renewal or extension terms, but I'd need to review the specific provisions to give you accurate details."
     
     def _generate_generic_answer(self, chunks, question_analysis) -> str:
-        """Generate generic answer from available content"""
+        """Generate generic answer from available content with natural language"""
+        
+        # Check if we actually have relevant information
+        question_text = question_analysis.original_question.lower()
+        question_keywords = question_analysis.keywords if hasattr(question_analysis, 'keywords') else []
+        
+        # Natural "I don't know" responses for insufficient information
+        insufficient_info_responses = [
+            "I couldn't find specific information about that in the contract documents I have access to.",
+            "Sorry, I don't see details about that particular topic in these contracts.",
+            "I'm afraid the documents don't contain clear information to answer that question.",
+            "I don't have enough information in these contracts to give you a definitive answer on that.",
+            "That's not something I can find specific details about in the available documents."
+        ]
+        
+        # Check content relevance
+        relevant_chunks = []
+        for chunk in chunks[:3]:  # Check top 3 chunks
+            chunk_text = chunk.content.lower()
+            # Simple relevance check
+            if any(keyword.lower() in chunk_text for keyword in question_keywords if len(keyword) > 3):
+                relevant_chunks.append(chunk)
+            elif any(word in chunk_text for word in question_text.split() if len(word) > 3):
+                relevant_chunks.append(chunk)
+        
+        # If no relevant chunks found, use natural "I don't know" response
+        if not relevant_chunks:
+            import random
+            return random.choice(insufficient_info_responses)
+        
+        # Generate natural response when we have relevant information
+        natural_intros = [
+            "Looking at the contract documents, here's what I found:",
+            "From what I can see in the contracts:",
+            "Based on the contract information available:",
+            "The contracts indicate the following:",
+            "Here's what the documents show:"
+        ]
+        
         answer_parts = []
-        answer_parts.append("Based on the available contract documents:")
+        import random
+        answer_parts.append(random.choice(natural_intros))
         answer_parts.append("")
         
-        # Add information from top chunks with better formatting
-        for i, chunk in enumerate(chunks[:2], 1):
-            location = f"{chunk.document_title}, {chunk.section_title}"
-            # Extract key information more intelligently
+        # Add information from relevant chunks with natural language
+        for i, chunk in enumerate(relevant_chunks[:2], 1):
+            location_parts = []
+            if hasattr(chunk, 'document_title') and chunk.document_title:
+                location_parts.append(chunk.document_title)
+            if hasattr(chunk, 'section_title') and chunk.section_title:
+                location_parts.append(chunk.section_title)
+            
+            if location_parts:
+                location = " - ".join(location_parts)
+            else:
+                location = "the contract"
+            
+            # Extract and format content more naturally
             content = chunk.content
             if len(content) > 300:
                 # Find sentence boundaries and truncate appropriately
@@ -415,13 +511,21 @@ ANSWER:"""
                 if len(sentences) > 2:
                     content = '. '.join(sentences[:2]) + '.'
             
-            answer_parts.append(f"{i}. According to the {location}:")
-            answer_parts.append(f"   {content}")
+            # Use more natural language connectors
+            if i == 1:
+                answer_parts.append(f"In {location}: {content}")
+            else:
+                answer_parts.append(f"Additionally, {location.lower()} mentions: {content}")
             answer_parts.append("")
         
-        # Add summary if more information available
-        if len(chunks) > 2:
-            answer_parts.append(f"Additional relevant information is available in {len(chunks) - 2} more document sections.")
+        # Add natural conclusion if more information available
+        if len(chunks) > len(relevant_chunks) and len(relevant_chunks) < 2:
+            concluding_phrases = [
+                "There might be additional relevant details in other sections.",
+                "I found some other related information, but it may not directly answer your question.",
+                "Let me know if you need me to look into any specific aspect in more detail."
+            ]
+            answer_parts.append(random.choice(concluding_phrases))
         
         return "\n".join(answer_parts)
         

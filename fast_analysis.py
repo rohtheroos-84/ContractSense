@@ -355,14 +355,144 @@ class RiskAnalyzerFast:
     def __init__(self):
         self.financial_analyzer = FinancialRiskAnalyzer()
         self.legal_analyzer = LegalRiskAnalyzer()
+        
+        # Clause type multipliers for risk adjustment
+        self.clause_multipliers = {
+            "liability": 1.4,
+            "indemnity": 1.3,
+            "arbitration": 1.2,
+            "payment": 1.0,
+            "assignment": 0.9,
+            "scope": 0.7,
+            "limitation_of_liability": 1.4,
+            "indemnification": 1.3,
+            "dispute_resolution": 1.2,
+            "termination": 1.0,
+            "confidentiality": 0.9,
+            "force_majeure": 0.8,
+            "data_protection": 1.2,
+            "governing_law": 1.1
+        }
+        
+        # Major asymmetric keywords for high-risk trigger
+        self.major_risk_keywords = [
+            "sole discretion", "exclusive", "binding arbitration", "non-refundable", 
+            "unlimited liability", "no reciprocal", "without cause", "immediate termination", 
+            "no liability", "as is", "irrevocable", "perpetual", "unlimited", 
+            "unrestricted", "absolute", "unconditional", "waive", "forfeit", "penalty"
+        ]
+        
+        # Semantic calibration - phrases that force High risk
+        self.critical_risk_phrases = [
+            "unlimited liability", "broad indemnification", "absolute liability",
+            "unconditional indemnification", "sole and exclusive remedy"
+        ]
+    
+    def _detect_clause_theme(self, clause_text: str) -> str:
+        """
+        Pre-processing step to detect clause themes and assign correct legal category
+        """
+        text_lower = clause_text.lower()
+        
+        # Liability and indemnity patterns
+        if any(kw in text_lower for kw in ["unlimited liability", "limitation of liability", "liable for", "damages", "loss"]):
+            return "liability"
+        if any(kw in text_lower for kw in ["indemnif", "hold harmless", "defend", "indemnity"]):
+            return "indemnity"
+        
+        # Dispute resolution patterns
+        if any(kw in text_lower for kw in ["arbitration", "arbitrator", "binding arbitration"]):
+            return "arbitration"
+        if any(kw in text_lower for kw in ["dispute resolution", "mediation", "litigation", "court"]):
+            return "dispute_resolution"
+        
+        # Termination patterns
+        if any(kw in text_lower for kw in ["terminat", "expire", "end", "breach", "default"]):
+            return "termination"
+        
+        # Payment and financial patterns
+        if any(kw in text_lower for kw in ["payment", "fee", "compensation", "invoice", "billing"]):
+            return "payment"
+        
+        # Confidentiality and data protection
+        if any(kw in text_lower for kw in ["confidential", "proprietary", "non-disclosure", "data protection", "privacy"]):
+            if "data protection" in text_lower or "privacy" in text_lower:
+                return "data_protection"
+            return "confidentiality"
+        
+        # Force majeure patterns
+        if any(kw in text_lower for kw in ["force majeure", "act of god", "unforeseeable", "beyond control"]):
+            return "force_majeure"
+        
+        # Governing law patterns  
+        if any(kw in text_lower for kw in ["governing law", "jurisdiction", "applicable law", "choice of law"]):
+            return "governing_law"
+        
+        # Assignment patterns
+        if any(kw in text_lower for kw in ["assignment", "assign", "transfer", "delegate"]):
+            return "assignment"
+        
+        # Scope and definitions
+        if any(kw in text_lower for kw in ["scope", "definition", "services", "deliverables", "work"]):
+            return "scope"
+        
+        # Default to original clause_type or "general"
+        return "general"
+    
+    def _count_major_risk_keywords(self, clause_text: str) -> int:
+        """
+        Count occurrences of major risk keywords in clause text
+        """
+        text_lower = clause_text.lower()
+        count = 0
+        
+        for keyword in self.major_risk_keywords:
+            if keyword in text_lower:
+                count += 1
+        
+        return count
+    
+    def _has_critical_risk_phrases(self, clause_text: str) -> bool:
+        """
+        Check if clause contains critical risk phrases that force High classification
+        """
+        text_lower = clause_text.lower()
+        return any(phrase in text_lower for phrase in self.critical_risk_phrases)
+    
+    def _calculate_keyword_boost(self, clause_text: str) -> float:
+        """
+        Calculate keyword boost based on major asymmetric keywords
+        Returns boost value to add to final score
+        """
+        keyword_count = self._count_major_risk_keywords(clause_text)
+        # Each major keyword adds +0.05 boost, max of +0.10
+        return min(keyword_count * 0.05, 0.10)
+    
+    def _dynamic_normalization(self, scores: List[float]) -> float:
+        """
+        Calculate dynamic normalization factor based on current batch max
+        """
+        if not scores or max(scores) == 0:
+            return 8.5  # fallback to observed max
+        
+        # Use actual max from current batch, with reasonable bounds
+        batch_max = max(scores)
+        return max(batch_max, 5.0)  # minimum normalization factor of 5.0
     
     def assess_clause_fast(self, clause_id: str, clause_type: str, clause_text: str) -> Dict[str, Any]:
         """
-        Fast risk assessment using rule-based analyzers only
+        Fast risk assessment using rule-based analyzers with refined scoring
         
         Returns:
             Dictionary with risk_level, risk_title, risk_description, problematic_spans, suggestions
         """
+        # Step 1: Pre-processing - detect correct clause theme
+        detected_clause_type = self._detect_clause_theme(clause_text)
+        
+        # Use detected type if original is missing or generic
+        if not clause_type or clause_type.lower() in ["general", "clause", "section"]:
+            clause_type = detected_clause_type
+        
         # Analyze financial risk
         financial_risk = self.financial_analyzer.analyze_financial_risk(
             clause_type=clause_type,
@@ -379,43 +509,53 @@ class RiskAnalyzerFast:
             industry=None
         )
         
-        # Combine risks
-        # Note: Risk scores from analyzers are NOT normalized (can be 0-10+)
-        # The analyzers start with base scores (3.0-4.0) even when no risk factors are detected
-        # We need to normalize and adjust based on actual risk factors detected
+        # Step 2: Apply lower base scores (0.8-1.2 range)
         overall_financial = financial_risk.overall_financial_risk
         overall_legal = legal_risk.overall_legal_risk
         
-        # Count actual risk factors detected (not just base scores)
+        # Count actual risk factors detected
         num_financial_factors = len(financial_risk.risk_factors)
         num_legal_factors = len(legal_risk.risk_factors)
         
-        # Normalize scores to 0-1 scale (assuming max score is around 10.0)
-        max_expected_score = 10.0
-        normalized_financial = min(overall_financial / max_expected_score, 1.0)
-        normalized_legal = min(overall_legal / max_expected_score, 1.0)
+        # Dynamic normalization using current scores
+        current_scores = [overall_financial, overall_legal]
+        normalization_factor = self._dynamic_normalization(current_scores)
         
-        # If no risk factors were detected, treat as low risk regardless of base score
-        # The analyzers use base scores of 3.0-4.0 even when nothing is detected
+        # Apply lower base scores when no risk factors detected
         if num_financial_factors == 0 and num_legal_factors == 0:
-            # No risk factors detected - force to low risk
-            normalized_financial = 0.15
-            normalized_legal = 0.15
-        elif num_financial_factors == 0:
-            # Only legal factors - reduce financial contribution
-            normalized_financial = 0.2
-        elif num_legal_factors == 0:
-            # Only financial factors - reduce legal contribution
-            normalized_legal = 0.2
+            # Force to very low base scores (0.8-1.2 range)
+            normalized_financial = 0.08  # 0.8/10
+            normalized_legal = 0.12      # 1.2/10
+        else:
+            # Normal normalization when risks are detected
+            normalized_financial = min(overall_financial / normalization_factor, 1.0)
+            normalized_legal = min(overall_legal / normalization_factor, 1.0)
         
-        # Weighted combination (financial 40%, legal 60%)
-        combined_score = (normalized_financial * 0.4) + (normalized_legal * 0.6)
+        # Step 3: Weighted combination - Legal 70%, Financial 30%
+        combined_score = (normalized_financial * 0.30) + (normalized_legal * 0.70)
         
-        # Determine risk level with more reasonable thresholds
-        # Adjust thresholds to be more conservative - only truly risky clauses should be High
-        if combined_score >= 0.55 and (num_financial_factors > 0 or num_legal_factors > 0):
+        # Step 4: Apply clause-type multipliers
+        clause_multiplier = self.clause_multipliers.get(clause_type, 1.0)
+        adjusted_score = min(combined_score * clause_multiplier, 1.0)
+        
+        # Step 5: Apply keyword boost (+0.05 per major keyword, max +0.10)
+        keyword_boost = self._calculate_keyword_boost(clause_text)
+        boosted_score = min(adjusted_score + keyword_boost, 1.0)
+        
+        # Step 6: Count major risk keywords and check critical phrases
+        major_keyword_count = self._count_major_risk_keywords(clause_text)
+        has_critical_phrases = self._has_critical_risk_phrases(clause_text)
+        
+        # Step 7: Determine risk level with refined thresholds
+        # Hard-coded override rules for critical phrases
+        if "unlimited liability" in clause_text.lower() or "broad indemnification" in clause_text.lower():
             risk_level = "High"
-        elif combined_score >= 0.30 and (num_financial_factors > 0 or num_legal_factors > 0):
+        elif has_critical_phrases:
+            # Semantic calibration - other critical phrases force High
+            risk_level = "High"
+        elif boosted_score >= 0.45 and major_keyword_count >= 2:
+            risk_level = "High"
+        elif boosted_score >= 0.25:
             risk_level = "Medium"
         else:
             risk_level = "Low"
@@ -427,21 +567,30 @@ class RiskAnalyzerFast:
         for factor in all_factors[:3]:  # Top 3 factors
             if "text" in factor:
                 problematic_spans.append(factor["text"])
+            elif "description" in factor:
+                problematic_spans.append(factor["description"])
         
         # Generate risk title and description
-        risk_title = self._generate_risk_title(clause_type, combined_score, all_factors)
+        risk_title = self._generate_risk_title(clause_type, boosted_score, all_factors)
         risk_description = self._generate_risk_description(clause_type, financial_risk, legal_risk, all_factors)
         suggestions = self._generate_suggestions(clause_type, risk_level, all_factors)
         
         return {
             "risk_level": risk_level,
-            "risk_score": combined_score,
+            "risk_score": boosted_score,
             "risk_title": risk_title,
             "risk_description": risk_description,
             "problematic_spans": problematic_spans,
             "suggestions": suggestions,
             "financial_risk": overall_financial,
-            "legal_risk": overall_legal
+            "legal_risk": overall_legal,
+            "clause_type": clause_type,  # Return the corrected clause type
+            "major_keywords": major_keyword_count,
+            "has_critical_phrases": has_critical_phrases,
+            "keyword_boost": keyword_boost,
+            "clause_multiplier": clause_multiplier,
+            "base_score": combined_score,
+            "normalization_factor": normalization_factor
         }
     
     def _generate_risk_title(self, clause_type: str, score: float, factors: List[Dict]) -> str:

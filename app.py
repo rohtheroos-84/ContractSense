@@ -76,9 +76,9 @@ def chip(level: str) -> str:
 def call_backend(file_bytes: bytes, filename: str) -> Dict[str, Any]:
     """Analyze contract using fast analysis pipeline"""
     import requests  # local import to keep startup fast
-    api_url = os.getenv("API_URL")
+    api_url = os.getenv("BACKEND_API_URL")  # Use separate backend URL
     
-    # If API URL is set, use backend API
+    # If Backend API URL is set, use backend API
     if api_url:
         files = {"file": (filename, file_bytes, "application/pdf")}
         try:
@@ -189,10 +189,31 @@ nav = st.sidebar.radio("Navigation", ["Upload PDF", "Dashboard", "Ask Questions"
 
 with st.sidebar:
     st.markdown("---")
-    st.caption("Backend")
-    st.text_input("API URL (optional)", key="api_url", value=os.getenv("API_URL", ""), help="If empty, demo data is shown.")
-    if st.session_state.get("api_url"):
-        os.environ["API_URL"] = st.session_state["api_url"]
+    st.caption("Backend Configuration")
+    
+    # Backend API URL input
+    st.text_input(
+        "Backend API URL (optional)", 
+        key="backend_api_url", 
+        value=os.getenv("BACKEND_API_URL", ""), 
+        help="URL for backend analysis service. Leave empty to use local analysis.",
+        placeholder="http://localhost:8000"
+    )
+    if st.session_state.get("backend_api_url"):
+        os.environ["BACKEND_API_URL"] = st.session_state["backend_api_url"]
+    
+    # Gemini API Key input
+    st.text_input(
+        "Gemini API Key (optional)",
+        key="gemini_api_key",
+        value=os.getenv("GEMINI_API_KEY", ""),
+        help="For enhanced QA responses. Leave empty to use fallback methods.",
+        type="password",
+        placeholder="AIza..."
+    )
+    if st.session_state.get("gemini_api_key"):
+        os.environ["GEMINI_API_KEY"] = st.session_state["gemini_api_key"]
+    
     st.markdown("---")
     st.caption("Export")
     if "analysis" in st.session_state:
@@ -284,8 +305,10 @@ if nav == "Ask Questions":
         st.subheader("💬 Ask Questions About Your Contract")
         st.caption("Ask natural language questions about the uploaded contract. Answers include citations and confidence scores.")
         
-        # Initialize QA engine if not already done
-        if "qa_engine" not in st.session_state:
+        # Initialize QA engine if not already done or if API key changed
+        current_gemini_key = os.getenv("GEMINI_API_KEY")
+        if ("qa_engine" not in st.session_state or 
+            st.session_state.get("qa_engine_api_key") != current_gemini_key):
             try:
                 import sys
                 import os
@@ -315,12 +338,12 @@ if nav == "Ask Questions":
                     else:
                         raise import_err
                 
-                gemini_key = os.getenv("GEMINI_API_KEY")
-                if not gemini_key:
-                    st.info("💡 Tip: Set GEMINI_API_KEY environment variable for enhanced answers. Working in fallback mode.")
+                current_gemini_key = os.getenv("GEMINI_API_KEY")
+                if not current_gemini_key:
+                    st.info("💡 Tip: Enter your Gemini API Key in the sidebar for enhanced answers. Working in fallback mode.")
                 
                 qa_engine = create_qa_engine(
-                    gemini_api_key=gemini_key,
+                    gemini_api_key=current_gemini_key,
                     workspace_path=str(workspace_path),
                     enable_validation=True,
                     context_strategy=ContextStrategy.FOCUSED
@@ -422,8 +445,10 @@ Suggestions: {'; '.join(risk_details.get('suggestions', []))}"""
                     # Store chunks for QA engine to use
                     st.session_state["document_chunks"] = document_chunks
                     st.session_state["qa_engine"] = qa_engine
+                    st.session_state["qa_engine_api_key"] = current_gemini_key
                 else:
                     st.session_state["qa_engine"] = qa_engine
+                    st.session_state["qa_engine_api_key"] = current_gemini_key
                     
             except Exception as e:
                 st.error(f"Failed to initialize QA engine: {e}")
