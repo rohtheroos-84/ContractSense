@@ -19,46 +19,85 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# ============= Theming / Glossy UI =============
+# ============= Theming / Majestic UI =============
 GLASS_CSS = """
 <style>
-:root { --glass-bg: rgba(255, 255, 255, 0.08); --glass-br: 18px; --glass-bd: 1px solid rgba(255,255,255,.15); }
-/* full-page gradient */
-.stApp {
-  background: radial-gradient(1200px 800px at 10% 10%, #3b82f6 0%, rgba(59,130,246,0) 40%),
-              radial-gradient(800px 600px at 90% 20%, #22d3ee 0%, rgba(34,211,238,0) 35%),
-              radial-gradient(900px 700px at 40% 90%, #a78bfa 0%, rgba(167,139,250,0) 40%),
-              linear-gradient(180deg, #0b1220 0%, #0e1426 100%);
-  color: #e5e7eb;
+:root {
+  --glass-bg: rgba(15, 23, 42, 0.55);
+  --glass-br: 22px;
+  --glass-bd: 1px solid rgba(148, 163, 184, 0.2);
+  --glow: 0 0 45px rgba(56, 189, 248, 0.15);
 }
-/* glass cards */
-.block-container { padding-top: 2.2rem; }
+.stApp {
+  background:
+    radial-gradient(1200px 800px at 15% 10%, rgba(56,189,248,0.25) 0%, rgba(56,189,248,0) 45%),
+    radial-gradient(900px 600px at 85% 15%, rgba(168,85,247,0.25) 0%, rgba(168,85,247,0) 45%),
+    radial-gradient(1000px 700px at 50% 90%, rgba(34,211,238,0.2) 0%, rgba(34,211,238,0) 50%),
+    linear-gradient(180deg, #0b1020 0%, #0f172a 100%);
+  color: #e2e8f0;
+}
+.block-container { padding-top: 1.5rem; }
 .glass {
   background: var(--glass-bg);
   border: var(--glass-bd);
   border-radius: var(--glass-br);
-  box-shadow: 0 20px 40px rgba(0,0,0,.35);
-  backdrop-filter: blur(10px);
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.45), var(--glow);
+  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(18px);
 }
-.glass.pad { padding: 1.25rem 1.25rem; }
-/* chips */
-.chip { display:inline-flex; align-items:center; gap:.5rem; padding:.25rem .6rem; font-weight:600; border-radius:999px; border:1px solid rgba(255,255,255,.2); background:rgba(255,255,255,.06); }
+.glass.pad { padding: 1.4rem 1.4rem; }
+.hero {
+  padding: 1.6rem 1.8rem;
+  border-radius: 28px;
+  background: linear-gradient(120deg, rgba(30,41,59,0.85), rgba(15,23,42,0.6));
+  border: 1px solid rgba(148,163,184,0.25);
+  box-shadow: 0 30px 80px rgba(14, 116, 144, 0.2);
+}
+.hero-title { font-size: 2rem; font-weight: 800; letter-spacing: .02em; }
+.hero-sub { opacity: .75; margin-top: .35rem; }
+.chip {
+  display:inline-flex; align-items:center; gap:.5rem; padding:.25rem .6rem;
+  font-weight:600; border-radius:999px; border:1px solid rgba(148,163,184,.3);
+  background:rgba(15,23,42,.5);
+}
 .chip .dot{width:.55rem;height:.55rem;border-radius:50%;display:inline-block}
 .chip.low .dot{background:#22c55e}
 .chip.medium .dot{background:#f59e0b}
 .chip.high .dot{background:#ef4444}
 .chip.critical .dot{background:#ef4444}
-/* clause box */
-.clause { padding:1rem; border-radius:14px; border:1px solid rgba(255,255,255,.1); background:rgba(255,255,255,.03); }
-.highlight { background: rgba(239, 68, 68, .2); padding: 0 .25rem; border-radius: 6px; }
-/* metrics */
-.metric { display:flex; flex-direction:column; padding:1rem; border-radius:18px; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.15); }
-.metric .label { opacity:.8; font-size:.85rem; }
-.metric .value { font-size:1.6rem; font-weight:800; margin-top:.25rem; }
-/* buttons */
-button[kind="primary"] { background: linear-gradient(135deg, #22d3ee, #3b82f6); border:none; }
-/* tables */
-thead tr th { background: rgba(255,255,255,.06) !important; }
+.clause {
+  padding:1rem;
+  border-radius:18px;
+  border:1px solid rgba(148,163,184,.2);
+  background:rgba(15,23,42,.45);
+}
+.highlight { background: rgba(248, 113, 113, .2); padding: 0 .25rem; border-radius: 6px; }
+.metric {
+  display:flex; flex-direction:column;
+  padding:1.1rem;
+  border-radius:20px;
+  background:rgba(15,23,42,.4);
+  border:1px solid rgba(148,163,184,.25);
+}
+.metric .label { opacity:.75; font-size:.85rem; text-transform: uppercase; letter-spacing: .08em; }
+.metric .value { font-size:1.7rem; font-weight:800; margin-top:.35rem; }
+.divider {
+  height: 1px;
+  background: linear-gradient(90deg, rgba(148,163,184,0), rgba(148,163,184,.35), rgba(148,163,184,0));
+  margin: 1rem 0;
+}
+button[kind="primary"] {
+  background: linear-gradient(135deg, #22d3ee, #6366f1);
+  border:none;
+  box-shadow: 0 12px 28px rgba(59, 130, 246, 0.3);
+}
+thead tr th { background: rgba(148,163,184,.12) !important; }
+.sidebar-card {
+  padding: 1rem;
+  border-radius: 18px;
+  background: rgba(15,23,42,.5);
+  border: 1px solid rgba(148,163,184,.25);
+}
 </style>
 """
 
@@ -184,11 +223,16 @@ def to_download_bytes(data: Dict[str, Any]) -> bytes:
 
 # ============= Sidebar =============
 st.sidebar.title("📄 Contract Insight")
-st.sidebar.caption("AI-powered clause & risk analysis")
-nav = st.sidebar.radio("Navigation", ["Upload PDF", "Dashboard", "Ask Questions"], index=0, help="Start by uploading a contract PDF, then view insights or ask questions.")
+st.sidebar.caption("Majestic clause intelligence")
+nav = st.sidebar.radio(
+    "Navigation",
+    ["Upload PDF", "Dashboard", "Ask Questions"],
+    index=0,
+    help="Start by uploading a contract PDF, then view insights or ask questions.",
+)
 
 with st.sidebar:
-    st.markdown("---")
+    st.markdown("<div class='sidebar-card'>", unsafe_allow_html=True)
     st.caption("Backend Configuration")
     
     # Backend API URL input
@@ -214,7 +258,7 @@ with st.sidebar:
     if st.session_state.get("gemini_api_key"):
         os.environ["GEMINI_API_KEY"] = st.session_state["gemini_api_key"]
     
-    st.markdown("---")
+    st.markdown("<div class='divider'></div>", unsafe_allow_html=True)
     st.caption("Export")
     if "analysis" in st.session_state:
         st.download_button(
@@ -224,6 +268,17 @@ with st.sidebar:
             mime="application/json",
             use_container_width=True,
         )
+    st.markdown("</div>", unsafe_allow_html=True)
+
+st.markdown(
+    """
+    <header class='hero' role='banner'>
+      <h1 class='hero-title'>Contract Insight Studio</h1>
+      <p class='hero-sub'>Majestic, citation-aware analysis for high-stakes agreements.</p>
+    </header>
+    """,
+    unsafe_allow_html=True,
+)
 
 # ============= Upload Page =============
 if nav == "Upload PDF":
@@ -233,11 +288,29 @@ if nav == "Upload PDF":
 
     uploaded = st.file_uploader("Drag & drop or browse your PDF", type=["pdf"], label_visibility="collapsed")
 
-    colA, colB = st.columns([1, 2])
+    colA, colB, colC = st.columns([1, 1.2, 1.8])
     with colA:
         analyze_clicked = st.button("Analyze Contract", type="primary", use_container_width=True, disabled=uploaded is None)
     with colB:
-        st.info("Your file is sent to the backend you configure above. If none is set, we'll show a realistic demo.")
+        st.markdown(
+            """
+            <div class='clause'>
+              <strong>Smart Routing</strong><br/>
+              Your file is sent to the backend you configure. If none is set, we run fast local triage.
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    with colC:
+        st.markdown(
+            """
+            <div class='clause'>
+              <strong>What you get</strong><br/>
+              Clause highlights, risk signals, suggested mitigations, and exportable reports.
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
     if analyze_clicked and uploaded is not None:
         # Read file bytes (reset file pointer first)
@@ -557,9 +630,29 @@ Suggestions: {'; '.join(risk_details.get('suggestions', []))}"""
             key="qa_question"
         )
         
-        col1, col2 = st.columns([1, 4])
+        col1, col2, col3 = st.columns([1, 2, 2])
         with col1:
             ask_button = st.button("Ask", type="primary", use_container_width=True)
+        with col2:
+            st.markdown(
+                """
+                <div class='clause'>
+                  <strong>Provenance Mode</strong><br/>
+                  Answers include source citations and confidence scores.
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+        with col3:
+            st.markdown(
+                """
+                <div class='clause'>
+                  <strong>Tip</strong><br/>
+                  Add a Gemini API key in the sidebar to boost answer quality.
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
         
         # Process question
         if ask_button and question:
