@@ -271,10 +271,10 @@ with st.sidebar:
 
 st.markdown(
     """
-    <div class='hero'>
-      <div class='hero-title'>Contract Insight Studio</div>
-      <div class='hero-sub'>Majestic, citation-aware analysis for high-stakes agreements.</div>
-    </div>
+    <header class='hero' role='banner'>
+      <h1 class='hero-title'>Contract Insight Studio</h1>
+      <p class='hero-sub'>Majestic, citation-aware analysis for high-stakes agreements.</p>
+    </header>
     """,
     unsafe_allow_html=True,
 )
