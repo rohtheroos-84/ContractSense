@@ -42,6 +42,7 @@ GLASS_CSS = """
   border: var(--glass-bd);
   border-radius: var(--glass-br);
   box-shadow: 0 24px 60px rgba(15, 23, 42, 0.45), var(--glow);
+  -webkit-backdrop-filter: blur(18px);
   backdrop-filter: blur(18px);
 }
 .glass.pad { padding: 1.4rem 1.4rem; }
